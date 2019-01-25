@@ -99,7 +99,7 @@ class Request(object):
             self.request_session = None
 
     async def fetch(self) -> Response:
-        res_headers,res_history = {},()
+        res_headers, res_history = {}, ()
         res_status = 0
         res_data, res_cookies = None, None
         if self.request_config.get('DELAY', 0) > 0:

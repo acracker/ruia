@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 
 import asyncio
-
 from datetime import datetime
 from functools import reduce
 from inspect import isawaitable
@@ -10,7 +9,8 @@ from types import AsyncGeneratorType
 
 from ruia.middleware import Middleware
 from ruia.request import Request
-from ruia.utils import get_logger
+from ruia.response import Response
+from ruia.utils import get_logger, default_pop
 
 try:
     import uvloop
@@ -28,8 +28,6 @@ class Spider:
     start_urls, worker_tasks = [], []
 
     def __init__(self, middleware=None, loop=None, is_async_start=False):
-        if not self.start_urls or not isinstance(self.start_urls, list):
-            raise ValueError("Spider must have a param named start_urls, eg: start_urls = ['https://www.github.com']")
         self.is_async_start = is_async_start
         self.logger = get_logger(name=self.name)
         self.loop = loop
@@ -44,7 +42,7 @@ class Spider:
         # semaphore
         self.sem = asyncio.Semaphore(getattr(self, 'concurrency', 3))
 
-    async def parse(self, res):
+    async def parse(self, response: Response):
         raise NotImplementedError
 
     @classmethod
@@ -137,17 +135,30 @@ class Spider:
         await self._run_response_middleware(request, response)
         return callback_res, response
 
-    async def start_master(self):
+    async def start_requests(self):
+        if not self.start_urls or not isinstance(self.start_urls, list):
+            raise ValueError("Spider must have a param named start_urls, eg: start_urls = ['https://www.github.com']")
         for url in self.start_urls:
-            request_ins = Request(url=url,
-                                  callback=self.parse,
-                                  headers=getattr(self, 'headers', {}),
-                                  metadata=getattr(self, 'metadata', {}),
-                                  request_config=getattr(self, 'request_config'),
-                                  request_session=getattr(self, 'request_session', None),
-                                  res_type=getattr(self, 'res_type', 'text'),
-                                  **getattr(self, 'kwargs', {}))
-            # self.request_queue.put_nowait(request_ins.fetch_callback(self.sem))
+            yield self.make_requests_from_url(url=url)
+
+    def make_requests_from_url(self, url, **kwargs):
+        headers = default_pop(kwargs, 'headers', getattr(self, 'headers', {}))
+        metadata = default_pop(kwargs, 'metadata', getattr(self, 'metadata', {}))
+        request_config = default_pop(kwargs, 'request_config', getattr(self, 'request_config'))
+        request_session = default_pop(kwargs, 'request_session', getattr(self, 'request_session', None))
+        res_type = default_pop(kwargs, 'res_type', getattr(self, 'res_type', 'text'))
+        kwargs.update(getattr(self, 'kwargs', {}))
+        return Request(url=url,
+                       callback=self.parse,
+                       headers=headers,
+                       metadata=metadata,
+                       request_config=request_config,
+                       request_session=request_session,
+                       res_type=res_type,
+                       **kwargs)
+
+    async def start_master(self):
+        async for request_ins in self.start_requests():
             self.request_queue.put_nowait(self.handle_request(request_ins))
         workers = [asyncio.ensure_future(self.start_worker()) for i in range(2)]
         await self.request_queue.join()

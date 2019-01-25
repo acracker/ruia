@@ -5,5 +5,6 @@ from .item import Item
 from .middleware import Middleware
 from .request import Request
 from .spider import Spider
+from .response import Response
 
 __version__ = "0.0.8"
