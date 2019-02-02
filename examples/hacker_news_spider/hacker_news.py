@@ -31,7 +31,6 @@ class HackerNewsSpider(Spider):
 
     async def parse_item(self, res):
         items = await HackerNewsItem.get_items(html=res.html)
-
         for item in items:
             try:
                 await self.mongo_db.news.update_one({
@@ -43,4 +42,4 @@ class HackerNewsSpider(Spider):
 
 
 if __name__ == '__main__':
-    HackerNewsSpider.start(middleware=middleware)
+    HackerNewsSpider.start()

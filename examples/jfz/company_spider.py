@@ -37,8 +37,8 @@ class CompanySpider(Spider):
 
     async def start_requests(self):
         num = await self.get_total_pages()
-        print("todo")   # todo
-        num = 1
+        # print("todo")   # todo
+        # num = 1
         for i in range(1, num+1):
             url = "https://www.jfz.com/simu/company_p%s.html" % i
             yield self.make_requests_from_url(url=url)
