@@ -11,9 +11,10 @@
 # @Author  : pang
 # @File    : fund_spider.py
 # @Software: PyCharm
-
-import logging
+import asyncio
 import os
+import logging
+import datetime
 
 from motor.motor_asyncio import AsyncIOMotorClient
 
@@ -50,23 +51,40 @@ class NavSpider(Spider):
         super().__init__(middleware, loop, is_async_start)
         self.client = AsyncIOMotorClient(MONGODB_URL, io_loop=loop)
         self.db_name = DB_NAME
-        self.collection = 'jfz:fund'
+        self.collection = 'jfz:nav'
         self.id_map_collection = 'fund_id_map'
         self.fund_codes = None
 
     async def get_fund_codes(self):
         cursor = self.client[self.db_name][self.id_map_collection].find()
         async for doc in cursor:
-            yield doc['jfz_id']
+            yield doc['_id'], doc['jfz_id']
+            # break
 
     async def start_requests(self):
-        async for jfz_id in self.get_fund_codes():
+        async for _id, jfz_id in self.get_fund_codes():
             url = "https://www.jfz.com/simu/chart?id=%s" % jfz_id
-            yield self.make_requests_from_url(url=url)
-            break
+            metadata = {'_id': _id}
+            yield self.make_requests_from_url(url=url, res_type='json', metadata=metadata)
 
     async def parse(self, response: Response):
         try:
+            data = response.html
+            if len(data) != 2:
+                return
+            data = data[0]['data']
+            _id = response.metadata['_id']
+            update_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            tasks = []
+            for item in data:
+                ts = float(item['x']) / 1000.0
+                sum_nav = float(item['y'])
+                date = datetime.datetime.fromtimestamp(ts).strftime("%Y%m%d")
+                row = {'sum_nav': sum_nav, 'update_time': update_time}
+                co = self.client[self.db_name][self.collection].update_one({'fund_id': _id, 'date': date}, {'$set': row}, upsert=True)
+                task = asyncio.ensure_future(co, loop=self.loop)
+                tasks.append(task)
+            await asyncio.gather(*tasks)
             return
         except Exception as e:
             logging.exception(e)
