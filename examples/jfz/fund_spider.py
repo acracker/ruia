@@ -4,6 +4,7 @@
 # @Author  : pang
 # @File    : fund_spider.py
 # @Software: PyCharm
+import os
 import asyncio
 import re
 import logging
@@ -18,8 +19,9 @@ except ImportError:
     sys.path[0] = os.path.dirname(os.path.abspath(__file__))
     from items import FundItem
 
-
-MONGODB_URL = "mongodb://192.168.1.251:27017"
+MONGODB_URL = os.environ.get('MONGODB_URL')
+if not MONGODB_URL:
+    MONGODB_URL = "mongodb://192.168.1.251:27017"
 DB_NAME = "privately_fund"
 
 
@@ -29,7 +31,7 @@ class FundSpider(Spider):
         'DELAY': 2,
         'TIMEOUT': 20
     }
-    concurrency = 10
+    # concurrency = 3
 
     kwargs = {}
     headers = {'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8', 'Accept-Encoding': 'gzip, deflate, br',
