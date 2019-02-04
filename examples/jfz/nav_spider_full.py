@@ -23,7 +23,6 @@ except ImportError:
 MONGODB_URL = os.environ.get('MONGODB_URL')
 if not MONGODB_URL:
     MONGODB_URL = "mongodb://192.168.1.251:27017"
-    MONGODB_URL = "mongodb://101.201.196.115:33017"
 DB_NAME = "privately_fund"
 
 
@@ -99,7 +98,7 @@ class NavSpider(Spider):
         return True
 
     async def get_fund_codes(self):
-        cursor = self.client[self.db_name][self.id_map_collection].find()
+        cursor = self.client[self.db_name][self.id_map_collection].find().sort({'%s_update_time' % SOURCE: 1})
         async for doc in cursor:
             yield doc['_id'], doc['%s_id' % SOURCE]
             # break
