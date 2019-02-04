@@ -5,14 +5,8 @@
 # @File    : nav_spider.py
 # @Software: PyCharm
 
-# !/usr/bin/env python
-# -*- coding: utf-8 -*-
-# @Time    : 2019-01-30 11:20
-# @Author  : pang
-# @File    : fund_spider.py
-# @Software: PyCharm
-import asyncio
 import os
+import asyncio
 import logging
 import datetime
 
@@ -35,11 +29,11 @@ DB_NAME = "privately_fund"
 
 class NavSpider(Spider):
     request_config = {
-        'RETRIES': 0,
-        'DELAY': 1,
+        'RETRIES': 2,
+        'DELAY': 5,
         'TIMEOUT': 20
     }
-    # concurrency = 3
+    concurrency = 2
 
     kwargs = {}
     headers = {'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8', 'Accept-Encoding': 'gzip, deflate, br',
@@ -70,7 +64,8 @@ class NavSpider(Spider):
     async def parse(self, response: Response):
         try:
             data = response.html
-            if len(data) != 2:
+            if data is None or len(data) != 2:
+                logging.info("采集失败. url:%s" % response.url)
                 return
             data = data[0]['data']
             _id = response.metadata['_id']
