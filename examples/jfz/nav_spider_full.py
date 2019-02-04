@@ -104,7 +104,6 @@ class NavSpider(Spider):
         cursor = self.client[self.db_name][self.id_map_collection].find()
         async for doc in cursor:
             yield doc['_id'], doc['%s_id' % SOURCE]
-            break
             # break
 
     async def start_requests(self):
