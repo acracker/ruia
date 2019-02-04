@@ -46,13 +46,15 @@ SOURCE = "jfz"
 
 class NavSpider(Spider):
     request_config = {
-        'RETRIES': 2,
+        'RETRIES': 0,
         'DELAY': 5,
         'TIMEOUT': 20
     }
     concurrency = 2
 
-    kwargs = {}
+    kwargs = {
+        'proxy': "http://16FDNCRS:234379@n5.t.16yun.cn:6441",
+    }
     headers = {'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8', 'Accept-Encoding': 'gzip, deflate, br',
                'Accept-Language': 'zh-CN,zh;q=0.9', 'Cache-Control': 'max-age=0', 'Connection': 'keep-alive',
                'Host': 'www.jfz.com', 'Upgrade-Insecure-Requests': '1',
@@ -98,9 +100,11 @@ class NavSpider(Spider):
         return True
 
     async def get_fund_codes(self):
-        cursor = self.client[self.db_name][self.id_map_collection].find().sort({'%s_update_time' % SOURCE: 1})
+        # cursor = self.client[self.db_name][self.id_map_collection].find().sort([('%s_update_time' % SOURCE, 1)])
+        cursor = self.client[self.db_name][self.id_map_collection].find()
         async for doc in cursor:
             yield doc['_id'], doc['%s_id' % SOURCE]
+            break
             # break
 
     async def start_requests(self):
