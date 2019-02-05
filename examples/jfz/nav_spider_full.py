@@ -100,11 +100,13 @@ class NavSpider(Spider):
         return True
 
     async def get_fund_codes(self):
-        # cursor = self.client[self.db_name][self.id_map_collection].find().sort([('%s_update_time' % SOURCE, 1)])
         cursor = self.client[self.db_name][self.id_map_collection].find()
+        cursor.sort('%s_update_time' % SOURCE, 1)
+        # cursor = self.client[self.db_name][self.id_map_collection].find()
         async for doc in cursor:
             yield doc['_id'], doc['%s_id' % SOURCE]
             # break
+        logging.info("所有基金采集请求生成完毕!")
 
     async def start_requests(self):
         self.request_session = aiohttp.ClientSession()
@@ -127,6 +129,9 @@ class NavSpider(Spider):
     async def parse(self, response: Response):
         try:
             data = response.html
+            if data is None:
+                logging.info("采集失败. url:%s" % response.url)
+                return None
             if not data[2]['isLogin']:
                 logging.warning("登录超时, 需要重新登录!")
                 await self.login()
