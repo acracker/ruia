@@ -127,6 +127,7 @@ class NavSpider(Spider):
             # url = "https://www.jfz.com/simu/chart?id=%s" % jfz_id
             metadata = {'_id': _id, 'jfz_id': jfz_id}
             yield self.make_requests_from_url(url=url, res_type='json', metadata=metadata, headers=headers)
+            logging.info("生成采集请求. ID:%s" % jfz_id)
 
     async def parse(self, response: Response):
         try:
