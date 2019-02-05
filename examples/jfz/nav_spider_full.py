@@ -111,12 +111,12 @@ class NavSpider(Spider):
         logging.info("所有基金采集请求生成完毕! 共%s个" % count)
 
     async def start_requests(self):
-        # self.request_session = aiohttp.ClientSession()
-        # if await self.login():
-        #     logging.info("登录成功")
-        # else:
-        #     logging.warning("登录失败")
-        #     return
+        self.request_session = aiohttp.ClientSession()
+        if await self.login():
+            logging.info("登录成功")
+        else:
+            logging.warning("登录失败")
+            return
         headers = {
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/64.0.3282.186 Safari/537.36',
