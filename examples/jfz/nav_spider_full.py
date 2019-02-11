@@ -6,7 +6,6 @@
 import re
 import os
 import asyncio
-import logging
 import datetime
 import aiohttp
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -43,7 +42,7 @@ class NavSpider(Spider):
         'TIMEOUT': 20
     }
     concurrency = 2
-
+    name = 'full_nav_spider'
     kwargs = {
         'proxy': HTTP_PROXY,
     }
@@ -54,6 +53,7 @@ class NavSpider(Spider):
 
     def __init__(self, middleware=None, loop=None, is_async_start=False):
         super().__init__(middleware, loop, is_async_start)
+        self.logger.info('MONGODB_URL:%s' % MONGODB_URL)
         self.client = AsyncIOMotorClient(MONGODB_URL, io_loop=loop)
         self.db_name = DB_NAME
         self.nav_collection = '%s:nav' % SOURCE
@@ -61,6 +61,7 @@ class NavSpider(Spider):
         self.fund_codes = None
         self.token = None
         self.request_session = None
+        self.sem = asyncio.Semaphore(self.concurrency * 2)
 
     async def login(self):
         url = "https://passport.jinfuzi.com/passport/user/loginAjax?cb=" \
@@ -104,9 +105,9 @@ class NavSpider(Spider):
     async def start_requests(self):
         self.request_session = aiohttp.ClientSession()
         if await self.login():
-            logging.info("登录成功")
+            self.logger.info("登录成功")
         else:
-            logging.warning("登录失败")
+            self.logger.warning("登录失败")
             return
         headers = {
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
@@ -121,26 +122,26 @@ class NavSpider(Spider):
                 update_time = datetime.datetime.strptime(str_update_time, '%Y-%m-%d %H:%M:%S')
                 if (now_time - update_time).days <= 1:
                     # 如果当天天内采集过的, 则跳过
-                    logging.debug("最近更新过,跳过. ID: %s, 上次更新时间:%s" % (jfz_id, str_update_time))
+                    self.logger.debug("最近更新过,跳过. ID: %s, 上次更新时间:%s" % (jfz_id, str_update_time))
                     continue
             url = 'https://www.jfz.com/simu/simuProductNew/GetPrdNetWorthDrawDown?prdCode=%s' % jfz_id
             # url = "https://www.jfz.com/simu/chart?id=%s" % jfz_id
             metadata = {'_id': _id, 'jfz_id': jfz_id}
             yield self.make_requests_from_url(url=url, res_type='json', metadata=metadata, headers=headers)
-            logging.info("生成采集请求. ID:%s" % jfz_id)
+            self.logger.info("生成采集请求. ID:%s" % jfz_id)
 
     async def parse(self, response: Response):
         try:
             data = response.html
             if data is None:
-                logging.info("采集失败. url:%s" % response.url)
+                self.logger.info("采集失败. url:%s" % response.url)
                 return None
             if not data[2]['isLogin']:
-                logging.warning("登录超时, 需要重新登录!")
+                self.logger.warning("登录超时, 需要重新登录!")
                 await self.login()
                 return
             if data[0] != 10000:
-                logging.info("采集失败. url:%s" % response.url)
+                self.logger.info("采集失败. url:%s" % response.url)
                 return None
             else:
                 data = data[2]
@@ -161,16 +162,17 @@ class NavSpider(Spider):
                     tasks.append(UpdateOne({'fund_id': _id, 'date': date}, {'$set': row}, upsert=True))
                     task = make_task_persist_update_detail(_id=jfz_id, source='jfz', update_time=update_time)
                     tasks_flag.append(task)
-                await self.client[self.db_name][self.nav_collection].bulk_write(tasks)
-                await self.client[self.db_name][self.id_map_collection].bulk_write(tasks_flag)
-                logging.info("采集基金[%s]数据, 条数: [%s]" % (jfz_id, len(data)))
+                async with self.sem:
+                    await self.client[self.db_name][self.nav_collection].bulk_write(tasks)
+                    await self.client[self.db_name][self.id_map_collection].bulk_write(tasks_flag)
+                    self.logger.info("采集基金[%s]数据, 条数: [%s]" % (jfz_id, len(data)))
                 return
             else:
-                logging.info("采集失败. url:%s" % response.url)
+                self.logger.info("采集失败. url:%s" % response.url)
                 return
         except Exception as e:
-            logging.warning("采集失败. url:%s" % response.url)
-            logging.exception(e)
+            self.logger.warning("采集失败. url:%s" % response.url)
+            self.logger.exception(e)
             return
 
 

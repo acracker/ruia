@@ -123,6 +123,7 @@ class Request(object):
                     res_cookies, res_headers, res_history = resp.cookies, resp.headers, resp.history
         except Exception as e:
             self.logger.error(f"<Error: {self.url} {res_status} {str(e)}>")
+            self.logger.exception(e)
 
         if self.retry_times > 0 and res_data is None:
             retry_times = self.request_config.get('RETRIES', 3) - self.retry_times + 1
