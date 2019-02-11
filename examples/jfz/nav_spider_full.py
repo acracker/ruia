@@ -5,6 +5,7 @@
 # @Software: PyCharm
 import re
 import os
+import time
 import asyncio
 import datetime
 import aiohttp
@@ -41,7 +42,7 @@ class NavSpider(Spider):
         'DELAY': 5,
         'TIMEOUT': 20
     }
-    concurrency = 2
+    concurrency = 3
     name = 'full_nav_spider'
     kwargs = {
         'proxy': HTTP_PROXY,
@@ -61,7 +62,7 @@ class NavSpider(Spider):
         self.fund_codes = None
         self.token = None
         self.request_session = None
-        self.sem = asyncio.Semaphore(self.concurrency * 2)
+        self.sem = asyncio.Semaphore(self.concurrency, loop=self.loop)
 
     async def login(self):
         url = "https://passport.jinfuzi.com/passport/user/loginAjax?cb=" \
@@ -145,6 +146,7 @@ class NavSpider(Spider):
                 return None
             else:
                 data = data[2]
+            self.logger.debug('开始解析响应. url:%s' % response.url)
             if data['isLogin'] and data['isVerify']:
                 data = data['hcData']
                 _id = response.metadata['_id']
@@ -163,9 +165,11 @@ class NavSpider(Spider):
                     task = make_task_persist_update_detail(_id=jfz_id, source='jfz', update_time=update_time)
                     tasks_flag.append(task)
                 async with self.sem:
+                    s = time.time()
                     await self.client[self.db_name][self.id_map_collection].bulk_write(tasks_flag)
                     await self.client[self.db_name][self.nav_collection].bulk_write(tasks)
-                    self.logger.info("采集基金[%s]数据, 条数: [%s]" % (jfz_id, len(data)))
+                    e = time.time()
+                    self.logger.info("采集基金[%s]数据, 条数: [%s], 存储耗时:%s s" % (jfz_id, len(data), round(e-s, 2)))
                 return
             else:
                 self.logger.info("采集失败. url:%s" % response.url)
