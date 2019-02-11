@@ -73,8 +73,16 @@ class FundInfoSpider(Spider):
 
     async def start_requests(self):
         self.request_session = aiohttp.ClientSession()
+        now_time = datetime.datetime.now()
         async for doc in self.get_all_fund():
             jfz_id = doc['id']
+            if 'update_time' in doc.keys():
+                str_update_time = doc['update_time']
+                update_time = datetime.datetime.strptime(str_update_time, '%Y-%m-%d %H:%M:%S')
+                if (now_time - update_time).days <= 1:
+                    # 如果当天天内采集过的, 则跳过
+                    self.logger.debug("最近更新过,跳过. ID: %s, 上次更新时间:%s" % (jfz_id, str_update_time))
+                    continue
             url = 'https://www.jfz.com/simu/p-%s.html' % jfz_id
             metadata = {'jfz_id': jfz_id}
             yield self.make_requests_from_url(url=url, metadata=metadata)

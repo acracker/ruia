@@ -119,11 +119,11 @@ class NavSpider(Spider):
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/64.0.3282.186 Safari/537.36',
             'Host': 'www.jfz.com',
         }
+        now_time = datetime.datetime.now()
         async for doc in self.get_all_fund():
             if '%s_id' % SOURCE not in doc.keys():
                 continue
             _id, jfz_id = doc['_id'], doc['%s_id' % SOURCE]
-            now_time = datetime.datetime.now()
             if '%s_update_time' % SOURCE in doc.keys():
                 str_update_time = doc['%s_update_time' % SOURCE]
                 update_time = datetime.datetime.strptime(str_update_time, '%Y-%m-%d %H:%M:%S')
