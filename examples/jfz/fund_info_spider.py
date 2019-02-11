@@ -40,8 +40,10 @@ class FundInfoSpider(Spider):
         'TIMEOUT': 20
     }
     concurrency = 3
+    kwargs = {
+        'proxy': HTTP_PROXY,
+    }
 
-    kwargs = {}
     headers = {'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8', 'Accept-Encoding': 'gzip, deflate, br',
                'Accept-Language': 'zh-CN,zh;q=0.9', 'Cache-Control': 'max-age=0', 'Connection': 'keep-alive',
                'Host': 'www.jfz.com', 'Upgrade-Insecure-Requests': '1',
