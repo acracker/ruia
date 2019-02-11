@@ -4,25 +4,33 @@
 # @Author  : pang
 # @File    : fund_info_spider.py
 # @Software: PyCharm
+import datetime
 import os
 import asyncio
 import re
 import logging
+import time
+
+import aiohttp
 from motor.motor_asyncio import AsyncIOMotorClient
 from ruia import Request, Spider, Response
 
 try:
-    from items import FundItem
+    from items import FundInfoItemV1
+    from settings import *
 except ImportError:
-    import os
     import sys
     sys.path[0] = os.path.dirname(os.path.abspath(__file__))
-    from items import FundItem
+    from items import FundInfoItemV1
+    from settings import *
 
-MONGODB_URL = os.environ.get('MONGODB_URL')
-if not MONGODB_URL:
-    MONGODB_URL = "mongodb://192.168.1.251:27017"
-DB_NAME = "privately_fund"
+
+"""
+根据基金排行中找到的编号 爬取 基金信息页面
+
+https://www.jfz.com/simu/p-P6281mbsw2.html
+
+"""
 
 
 class FundInfoSpider(Spider):
@@ -31,7 +39,7 @@ class FundInfoSpider(Spider):
         'DELAY': 2,
         'TIMEOUT': 20
     }
-    # concurrency = 3
+    concurrency = 3
 
     kwargs = {}
     headers = {'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8', 'Accept-Encoding': 'gzip, deflate, br',
@@ -41,48 +49,67 @@ class FundInfoSpider(Spider):
 
     def __init__(self, middleware=None, loop=None, is_async_start=False):
         super().__init__(middleware, loop, is_async_start)
+        self.logger.info('MONGODB_URL:%s' % MONGODB_URL)
         self.client = AsyncIOMotorClient(MONGODB_URL, io_loop=loop)
         self.db_name = DB_NAME
-        self.collection = 'jfz:fund'
-        self.id_map_collection = 'fund_id_map'
+        self.fund_info_collection = self.client[self.db_name]['%s:fund' % SOURCE]
+        self.request_session = None
+        self.sem = asyncio.Semaphore(self.concurrency, loop=self.loop)
 
-    async def get_total_pages(self):
-        # request = self.make_requests_from_url("https://www.jfz.com/simu/list_w1_r1_p1.html")
-        request = self.make_requests_from_url("https://www.jfz.com/simu/list_w1_r1.html")
-        resp = await request.fetch()
-        if resp.status == 200:
-            elements = resp.html_etree.xpath('//li[@class="page-item page-last"]/a/@href')
-            if len(elements) == 1:
-                pate_last_url = str(elements[0])
-                match = re.match(r'.*?p(\d+)\.htm', pate_last_url)
-                if match:
-                    return int(match.group(1))
-        raise ValueError('failed to get total pages.')
+    async def get_all_fund(self):
+        try:
+            limit = int(os.environ.get('LIMIT', 0))
+            self.logger.info("LIMIT:%s" % limit)
+        except ValueError:
+            limit = 0
+        cursor = self.fund_info_collection.find(limit=limit)
+        cursor.sort('update_time', 1)
+        count = 0
+        async for doc in cursor:
+            yield doc
+            count += 1
 
     async def start_requests(self):
-        num = await self.get_total_pages()
-        # num = 1
-        for i in range(1, num+1):
-            url = "https://www.jfz.com/simu/list_w1_r1_p%s.html" % i
-            yield self.make_requests_from_url(url=url)
+        self.request_session = aiohttp.ClientSession()
+        async for doc in self.get_all_fund():
+            jfz_id = doc['id']
+            url = 'https://www.jfz.com/simu/p-%s.html' % jfz_id
+            metadata = {'jfz_id': jfz_id}
+            yield self.make_requests_from_url(url=url, metadata=metadata)
+            self.logger.info("生成采集请求. ID:%s" % jfz_id)
 
     async def parse(self, response: Response):
         try:
-            items = await FundItem.get_item(html=response.html)
-            tasks = []
-            for row in items.rows:
-                logging.debug("item:%s" % str(row))
-                co = self.client[self.db_name][self.collection].update_one({'id': row['id']}, {'$set': row}, upsert=True)
-                task = asyncio.ensure_future(co, loop=self.loop)
-                tasks.append(task)
-                co = self.client[self.db_name][self.id_map_collection].update_one({'jfz_id': row['id']}, {'$set': {'jfz_id': row['id']}}, upsert=True)
-                task = asyncio.ensure_future(co, loop=self.loop)
-                tasks.append(task)
-            await asyncio.gather(*tasks)
+            update_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            data = await FundInfoItemV1.get_item(html=response.html)
+            product_info = data.product_info
+            if product_info is None:
+                self.logger.warning("网页解析错误. url:%s" % response.url)
+            jfz_id = response.metadata['jfz_id']
+            register_number = product_info['register_number']
+            full_name = product_info['full_name']
+            establishment_date = product_info['build_date']
+            row = {
+                'register_number': register_number,
+                'full_name': full_name,
+                'establishment_date': establishment_date,
+                'update_time': update_time,
+                'id': jfz_id,
+            }
+            s = time.time()
+            await self.fund_info_collection.update_one({'id': jfz_id}, {'$set': row}, upsert=True)
+            e = time.time()
+            self.logger.info("采集基金[%s]产品信息,  存储耗时:%s s" % (jfz_id, round(e - s, 2)))
         except Exception as e:
+            self.logger.warning("网页解析错误. url:%s" % response.url)
             logging.exception(e)
             return
 
 
+async def before_stop(spider):
+    if spider.request_session:
+        await spider.request_session.close()
+
+
 if __name__ == '__main__':
-    FundInfoSpider.start()
+    FundInfoSpider.start(before_stop=before_stop)

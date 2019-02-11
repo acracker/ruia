@@ -25,6 +25,12 @@ if not MONGODB_URL:
 DB_NAME = "privately_fund"
 
 
+"""
+从金斧子 私募排行页面中 抓取所有基金的基础信息, 编号, 策略信息, 投顾信息.
+
+"""
+
+
 class FundSpider(Spider):
     request_config = {
         'RETRIES': 0,
