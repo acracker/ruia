@@ -163,8 +163,8 @@ class NavSpider(Spider):
                     task = make_task_persist_update_detail(_id=jfz_id, source='jfz', update_time=update_time)
                     tasks_flag.append(task)
                 async with self.sem:
-                    await self.client[self.db_name][self.nav_collection].bulk_write(tasks)
                     await self.client[self.db_name][self.id_map_collection].bulk_write(tasks_flag)
+                    await self.client[self.db_name][self.nav_collection].bulk_write(tasks)
                     self.logger.info("采集基金[%s]数据, 条数: [%s]" % (jfz_id, len(data)))
                 return
             else:
