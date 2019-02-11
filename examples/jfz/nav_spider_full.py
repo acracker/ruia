@@ -94,7 +94,8 @@ class NavSpider(Spider):
 
     async def get_all_fund(self):
         try:
-            limit = int(os.environ('LIMIT', 0))
+            limit = int(os.environ.get('LIMIT', 0))
+            self.logger.info("LIMIT:%s" % limit)
         except ValueError:
             limit = 0
         cursor = self.id_map_collection.find(limit=limit)
