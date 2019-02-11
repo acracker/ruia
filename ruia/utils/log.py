@@ -4,12 +4,7 @@ import logging
 
 
 def get_logger(name='Ruia'):
-    logging_format = "[%(asctime)s]-%(name)s-%(levelname)-6s"
-    # logging_format += "%(module)-7s::l%(lineno)d: "
-    logging_format += "-[%(module)-7s"
-    logging_format += "-%(lineno)s]: "
-    logging_format += "%(message)s"
-
+    logging_format = '[%(levelname)-7s][%(asctime)s][module:%(module)-7s][%(filename)s][line:%(lineno)s]: %(message)s'
     logging.basicConfig(
         format=logging_format,
         level=logging.DEBUG
