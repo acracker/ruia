@@ -97,7 +97,7 @@ class NavSpider(Spider):
             limit = int(os.environ('LIMIT', 0))
         except ValueError:
             limit = 0
-        cursor = self.id_map_collection.find(limit=0)
+        cursor = self.id_map_collection.find(limit=limit)
         cursor.sort('%s_update_time' % SOURCE, 1)
         # cursor = self.client[self.db_name][self.id_map_collection].find()
         count = 0
