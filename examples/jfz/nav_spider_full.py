@@ -94,7 +94,7 @@ class NavSpider(Spider):
         return True
 
     async def get_all_fund(self):
-        cursor = self.client[self.db_name][self.id_map_collection].find()
+        cursor = self.client[self.db_name][self.id_map_collection].find(limit=0)
         cursor.sort('%s_update_time' % SOURCE, 1)
         # cursor = self.client[self.db_name][self.id_map_collection].find()
         count = 0
