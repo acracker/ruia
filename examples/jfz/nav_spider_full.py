@@ -57,9 +57,8 @@ class NavSpider(Spider):
         self.logger.info('MONGODB_URL:%s' % MONGODB_URL)
         self.client = AsyncIOMotorClient(MONGODB_URL, io_loop=loop)
         self.db_name = DB_NAME
-        self.nav_collection = '%s:nav' % SOURCE
-        self.id_map_collection = 'fund_id_map'
-        self.fund_codes = None
+        self.nav_collection = self.client[self.db_name]['%s:nav' % SOURCE]
+        self.id_map_collection = self.client[self.db_name]['fund_id_map']
         self.token = None
         self.request_session = None
         self.sem = asyncio.Semaphore(self.concurrency, loop=self.loop)
@@ -94,7 +93,7 @@ class NavSpider(Spider):
         return True
 
     async def get_all_fund(self):
-        cursor = self.client[self.db_name][self.id_map_collection].find(limit=0)
+        cursor = self.id_map_collection.find(limit=0)
         cursor.sort('%s_update_time' % SOURCE, 1)
         # cursor = self.client[self.db_name][self.id_map_collection].find()
         count = 0
@@ -116,6 +115,8 @@ class NavSpider(Spider):
             'Host': 'www.jfz.com',
         }
         async for doc in self.get_all_fund():
+            if '%s_id' % SOURCE not in doc.keys():
+                continue
             _id, jfz_id = doc['_id'], doc['%s_id' % SOURCE]
             now_time = datetime.datetime.now()
             if '%s_update_time' % SOURCE in doc.keys():
@@ -166,8 +167,8 @@ class NavSpider(Spider):
                     tasks_flag.append(task)
                 async with self.sem:
                     s = time.time()
-                    await self.client[self.db_name][self.id_map_collection].bulk_write(tasks_flag)
-                    await self.client[self.db_name][self.nav_collection].bulk_write(tasks)
+                    await self.id_map_collection.bulk_write(tasks_flag)
+                    await self.nav_collection.bulk_write(tasks)
                     e = time.time()
                     self.logger.info("采集基金[%s]数据, 条数: [%s], 存储耗时:%s s" % (jfz_id, len(data), round(e-s, 2)))
                 return
