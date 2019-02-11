@@ -158,7 +158,7 @@ class Request(object):
                 else:
                     callback_res = self.callback(res)
             except Exception as e:
-                self.logger.error(e)
+                self.logger.exception(e)
                 callback_res = None
         else:
             callback_res = None

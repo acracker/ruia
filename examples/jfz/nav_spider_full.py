@@ -10,38 +10,30 @@ import logging
 import datetime
 import aiohttp
 from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo import UpdateOne
 
 from ruia import Spider, Response
 
 try:
     from items import FundItem
+    from settings import *
 except ImportError:
     import sys
     sys.path[0] = os.path.dirname(os.path.abspath(__file__))
     from items import FundItem
-
-MONGODB_URL = os.environ.get('MONGODB_URL')
-if not MONGODB_URL:
-    MONGODB_URL = "mongodb://192.168.1.251:27017"
-DB_NAME = "privately_fund"
+    from settings import *
 
 
-def make_task_persist_update_detail(loop, collection, _id, source='jfz', update_time=None):
+def make_task_persist_update_detail(_id, source='jfz', update_time=None):
     """
     插入净值更新时间, 方便查询爬取净值
-    :param loop:
-    :param collection:
     :param _id:
     :param source:
     :param update_time:
     :return:
     """
     update_time = update_time or datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    co = collection.update_one({'%s_id' % source: _id}, {'$set': {'%s_update_time' % source: update_time}}, upsert=True)
-    return asyncio.ensure_future(co, loop=loop)
-
-
-SOURCE = "jfz"
+    return UpdateOne({'%s_id' % source: _id}, {'$set': {'%s_update_time' % source: update_time}}, upsert=True)
 
 
 class NavSpider(Spider):
@@ -53,7 +45,7 @@ class NavSpider(Spider):
     concurrency = 2
 
     kwargs = {
-        'proxy': "http://16FDNCRS:234379@n5.t.16yun.cn:6441",
+        'proxy': HTTP_PROXY,
     }
     headers = {'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8', 'Accept-Encoding': 'gzip, deflate, br',
                'Accept-Language': 'zh-CN,zh;q=0.9', 'Cache-Control': 'max-age=0', 'Connection': 'keep-alive',
@@ -64,7 +56,7 @@ class NavSpider(Spider):
         super().__init__(middleware, loop, is_async_start)
         self.client = AsyncIOMotorClient(MONGODB_URL, io_loop=loop)
         self.db_name = DB_NAME
-        self.collection = '%s:nav' % SOURCE
+        self.nav_collection = '%s:nav' % SOURCE
         self.id_map_collection = 'fund_id_map'
         self.fund_codes = None
         self.token = None
@@ -99,16 +91,15 @@ class NavSpider(Spider):
             return False
         return True
 
-    async def get_fund_codes(self):
+    async def get_all_fund(self):
         cursor = self.client[self.db_name][self.id_map_collection].find()
         cursor.sort('%s_update_time' % SOURCE, 1)
         # cursor = self.client[self.db_name][self.id_map_collection].find()
         count = 0
         async for doc in cursor:
-            yield doc['_id'], doc['%s_id' % SOURCE]
+            yield doc
             count += 1
             # break
-        logging.info("所有基金采集请求生成完毕! 共%s个" % count)
 
     async def start_requests(self):
         self.request_session = aiohttp.ClientSession()
@@ -122,7 +113,16 @@ class NavSpider(Spider):
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/64.0.3282.186 Safari/537.36',
             'Host': 'www.jfz.com',
         }
-        async for _id, jfz_id in self.get_fund_codes():
+        async for doc in self.get_all_fund():
+            _id, jfz_id = doc['_id'], doc['%s_id' % SOURCE]
+            now_time = datetime.datetime.now()
+            if '%s_update_time' % SOURCE in doc.keys():
+                str_update_time = doc['%s_update_time' % SOURCE]
+                update_time = datetime.datetime.strptime(str_update_time, '%Y-%m-%d %H:%M:%S')
+                if (now_time - update_time).days <= 1:
+                    # 如果当天天内采集过的, 则跳过
+                    logging.debug("最近更新过,跳过. ID: %s, 上次更新时间:%s" % (jfz_id, str_update_time))
+                    continue
             url = 'https://www.jfz.com/simu/simuProductNew/GetPrdNetWorthDrawDown?prdCode=%s' % jfz_id
             # url = "https://www.jfz.com/simu/chart?id=%s" % jfz_id
             metadata = {'_id': _id, 'jfz_id': jfz_id}
@@ -149,8 +149,8 @@ class NavSpider(Spider):
                 _id = response.metadata['_id']
                 jfz_id = response.metadata['jfz_id']
                 tasks = []
+                tasks_flag = []
                 update_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                logging.info("采集基金[%s]数据, 条数: [%s]" % (jfz_id, len(data)))
                 for item in data:
                     date = datetime.datetime.fromtimestamp(item['x'] / 1000).strftime('%Y%m%d')
                     row = {
@@ -158,13 +158,12 @@ class NavSpider(Spider):
                         'sum_nav': float(item['accNet']),
                         'update_time': update_time
                     }
-                    co = self.client[self.db_name][self.collection].update_one({'fund_id': _id, 'date': date}, {'$set': row}, upsert=True)
-                    task = asyncio.ensure_future(co, loop=self.loop)
-                    tasks.append(task)
-                    task = make_task_persist_update_detail(loop=self.loop, collection=self.client[self.db_name][self.id_map_collection],
-                                                           _id=jfz_id, source='jfz', update_time=update_time)
-                    tasks.append(task)
-                await asyncio.gather(*tasks)
+                    tasks.append(UpdateOne({'fund_id': _id, 'date': date}, {'$set': row}, upsert=True))
+                    task = make_task_persist_update_detail(_id=jfz_id, source='jfz', update_time=update_time)
+                    tasks_flag.append(task)
+                await self.client[self.db_name][self.nav_collection].bulk_write(tasks)
+                await self.client[self.db_name][self.id_map_collection].bulk_write(tasks_flag)
+                logging.info("采集基金[%s]数据, 条数: [%s]" % (jfz_id, len(data)))
                 return
             else:
                 logging.info("采集失败. url:%s" % response.url)
