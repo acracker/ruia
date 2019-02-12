@@ -184,7 +184,7 @@ class Spider:
                 self.worker_tasks = []
             self.request_queue.task_done()
 
-    async def stop(self, _signal):
+    async def stop(self, _signal=None):
         self.logger.info(f'Stopping spider: {self.name}')
         tasks = [task for task in asyncio.Task.all_tasks() if task is not
                  asyncio.tasks.Task.current_task()]

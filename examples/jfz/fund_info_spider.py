@@ -39,6 +39,7 @@ class FundInfoSpider(Spider):
         'DELAY': 2,
         'TIMEOUT': 20
     }
+    name = 'full_info_spider'
     concurrency = 3
     kwargs = {
         'proxy': HTTP_PROXY,
@@ -79,7 +80,7 @@ class FundInfoSpider(Spider):
             if 'update_time' in doc.keys():
                 str_update_time = doc['update_time']
                 update_time = datetime.datetime.strptime(str_update_time, '%Y-%m-%d %H:%M:%S')
-                if (now_time - update_time).days <= 1:
+                if (now_time - update_time).days <= 3:
                     # 如果当天天内采集过的, 则跳过
                     self.logger.debug("最近更新过,跳过. ID: %s, 上次更新时间:%s" % (jfz_id, str_update_time))
                     continue
@@ -91,6 +92,9 @@ class FundInfoSpider(Spider):
     async def parse(self, response: Response):
         try:
             update_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            if response.html is None:
+                self.logger.warning("网页解析错误. url:%s" % response.url)
+                return
             data = await FundInfoItemV1.get_item(html=response.html)
             product_info = data.product_info
             if product_info is None:
@@ -102,7 +106,7 @@ class FundInfoSpider(Spider):
             row = {
                 'register_number': register_number,
                 'full_name': full_name,
-                'establishment_date': establishment_date,
+                'establish_date': establishment_date,
                 'update_time': update_time,
                 'id': jfz_id,
             }

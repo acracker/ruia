@@ -95,6 +95,8 @@ class NavSpider(Spider):
     async def get_all_fund(self):
         try:
             limit = int(os.environ.get('LIMIT', 0))
+            limit = 0
+            print("test")       # todo
             self.logger.info("LIMIT:%s" % limit)
         except ValueError:
             limit = 0

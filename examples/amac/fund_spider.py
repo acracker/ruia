@@ -28,15 +28,23 @@ except ImportError:
 
 # http://gs.amac.org.cn/amac-infodisc/api/pof/fund?rand=0.03935877331629101&page=0&size=20
 
+"""
+从协会网站抓取所有基金基本信息, 不包括扩展信息.
+
+"""
+
 
 class FundSpider(Spider):
     request_config = {
-        'RETRIES': 0,
+        'RETRIES': 1,
         'DELAY': 1,
         'TIMEOUT': 20
     }
-    name = 'full_spider'
-    concurrency = 10
+    name = 'fund_spider'
+    concurrency = 3
+    kwargs = {
+        'proxy': HTTP_PROXY,
+    }
     headers = {'Accept': 'application/json, text/javascript, */*; q=0.01', 'Accept-Encoding': 'gzip, deflate', 'Accept-Language': 'zh-CN,zh;q=0.9',
                'Connection': 'keep-alive', 'Content-Length': '2', 'Content-Type': 'application/json', 'Host': 'gs.amac.org.cn',
                'Origin': 'http://gs.amac.org.cn', 'Referer': 'http://gs.amac.org.cn/amac-infodisc/res/pof/fund/index.html',
@@ -65,35 +73,40 @@ class FundSpider(Spider):
             yield self.make_requests_from_url(url, data=b"{}", method="POST", res_type='json')
 
     async def parse(self, response: Response):
-        data = response.html
-        if data is None or 'content' not in data:
-            return None
-        data = data['content']
-        update_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        for item in data:
-            row = dict()
-            row['register_number'] = item['fundNo']
-            row['full_name'] = str(item['fundName']).replace(' ', '')
-            row['company_name'] = item['managerName']
-            row['manager_type'] = item['managerType']
-            row['status'] = item['workingState']
-            try:
-                row['establish_date'] = datetime.datetime.fromtimestamp(item['establishDate'] / 1000).strftime("%Y%m%d")
-            except:
-                row['establish_date'] = item['establishDate']
-            row['company_url'] = item['managerUrl']
-            row['mandator_name'] = item['mandatorName']
-            row['last_quarter_update'] = item['lastQuarterUpdate']
-            row['is_depute_manage'] = item['isDeputeManage']
-            try:
-                row['put_on_record_date'] = datetime.datetime.fromtimestamp(item['putOnRecordDate'] / 1000).strftime("%Y%m%d")
-            except:
-                row['put_on_record_date'] = item['putOnRecordDate']
-            row['update_time'] = update_time
-            s = time.time()
-            await self.fund_collection.update_one({'register_number': row['register_number'], 'full_name': row['full_name']}, {'$set': row}, upsert=True)
-            e = time.time()
-            self.logger.info("采集基金[%s]信息,  存储耗时:%s s" % (row['register_number'], round(e - s, 2)))
+        try:
+            data = response.html
+            if data is None or 'content' not in data:
+                return None
+            data = data['content']
+            update_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            for item in data:
+                row = dict()
+                row['register_number'] = item['fundNo']
+                row['full_name'] = str(item['fundName']).replace(' ', '')
+                row['company_name'] = item['managerName']
+                row['manager_type'] = item['managerType']
+                row['status'] = item['workingState']
+                try:
+                    row['establish_date'] = datetime.datetime.fromtimestamp(item['establishDate'] / 1000).strftime("%Y%m%d")
+                except:
+                    row['establish_date'] = item['establishDate']
+                row['company_url'] = item['managerUrl']
+                row['mandator_name'] = item['mandatorName']
+                row['last_quarter_update'] = item['lastQuarterUpdate']
+                row['is_depute_manage'] = item['isDeputeManage']
+                try:
+                    row['put_on_record_date'] = datetime.datetime.fromtimestamp(item['putOnRecordDate'] / 1000).strftime("%Y%m%d")
+                except:
+                    row['put_on_record_date'] = item['putOnRecordDate']
+                row['update_time'] = update_time
+                s = time.time()
+                await self.fund_collection.update_one({'register_number': row['register_number'], 'full_name': row['full_name']}, {'$set': row}, upsert=True)
+                e = time.time()
+                self.logger.info("采集基金[%s]信息,  存储耗时:%s s" % (row['register_number'], round(e - s, 2)))
+        except Exception as e:
+            self.logger.info("采集失败. url:%s" % response.url)
+            self.logger.exception(e)
+            await self.stop()
 
 
 if __name__ == '__main__':
