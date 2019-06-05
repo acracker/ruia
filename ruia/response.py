@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import json
 
 from lxml import etree
 
@@ -10,21 +11,21 @@ class Response(object):
 
     def __init__(self, url: str, *,
                  metadata: dict,
-                 res_type: str,
-                 html: str = '',
+                 content: bytes = b'',
                  cookies,
                  history,
                  headers: dict = None,
                  status: int):
         self._callback_result = None
         self._url = url
+        self._content = content
         self._metadata = metadata
-        self._res_type = res_type
-        self._html = html
         self._cookies = cookies
         self._history = history
         self._headers = headers
         self._status = status
+        self._text = None
+        self._json = None
 
     @property
     def callback_result(self):
@@ -43,14 +44,6 @@ class Response(object):
         return self._metadata
 
     @property
-    def res_type(self):
-        return self._res_type
-
-    @property
-    def html(self):
-        return self._html
-
-    @property
     def cookies(self):
         return self._cookies
 
@@ -67,11 +60,24 @@ class Response(object):
         return self._status
 
     @property
+    def text(self):
+        if self._text is None:
+            self._text = self._content.decode()
+        return self._text
+
+    @property
+    def json(self):
+        if self._json is None:
+            try:
+                self._json = json.loads(self._content)
+            except json.decoder.JSONDecodeError:
+                return None
+        return self._json
+
+    @property
     def html_etree(self):
-        html_etree = None
-        if self.html:
-            html_etree = etree.HTML(self.html)
+        html_etree = etree.HTML(self.text)
         return html_etree
 
     def __str__(self):
-        return f'<Response url[{self._res_type}]: {self._url} status:{self._status} metadata:{self._metadata}>'
+        return f'<Response url: {self._url} status:{self._status} metadata:{self._metadata}>'

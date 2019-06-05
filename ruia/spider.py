@@ -148,8 +148,9 @@ class Spider:
         request_session = default_pop(kwargs, 'request_session', getattr(self, 'request_session', None))
         res_type = default_pop(kwargs, 'res_type', getattr(self, 'res_type', 'text'))
         kwargs.update(getattr(self, 'kwargs', {}))
+        callback = kwargs.pop('callback', self.parse)
         return Request(url=url,
-                       callback=self.parse,
+                       callback=callback,
                        headers=headers,
                        metadata=metadata,
                        request_config=request_config,

@@ -58,6 +58,7 @@ class Request(object):
         self.request_session = request_session
         self.request_config = request_config or self.REQUEST_CONFIG
         self.res_type = res_type
+        self.encoding = kwargs.pop('encoding', None)
         self.kwargs = kwargs
 
         self.close_request_session = False
@@ -101,7 +102,7 @@ class Request(object):
     async def fetch(self) -> Response:
         res_headers, res_history = {}, ()
         res_status = 0
-        res_data, res_cookies = None, None
+        res_content, res_cookies = None, None
         if self.request_config.get('DELAY', 0) > 0:
             await asyncio.sleep(self.request_config['DELAY'])
         try:
@@ -111,21 +112,13 @@ class Request(object):
                 async with self.current_request_func as resp:
                     res_status = resp.status
                     assert res_status in [200, 201]
-                    if self.res_type == 'bytes':
-                        res_data = await resp.read()
-                    elif self.res_type == 'json':
-                        res_data = await resp.json()
-                    else:
-                        res_data = await resp.text()
-                        # content = await resp.read()
-                        # charset = cchardet.detect(content)
-                        # res_data = content.decode(charset['encoding'])
+                    res_content = await resp.read()
                     res_cookies, res_headers, res_history = resp.cookies, resp.headers, resp.history
         except Exception as e:
             self.logger.error(f"<Error: {self.url} {res_status} {str(e)}>")
             self.logger.exception(e)
 
-        if self.retry_times > 0 and res_data is None:
+        if self.retry_times > 0 and res_content is None:
             retry_times = self.request_config.get('RETRIES', 3) - self.retry_times + 1
             self.logger.info(f'<Retry url: {self.url}>, Retry times: {retry_times}')
             self.retry_times -= 1
@@ -139,9 +132,8 @@ class Request(object):
         await self.close()
 
         response = Response(url=self.url,
-                            html=res_data,
+                            content=res_content,
                             metadata=self.metadata,
-                            res_type=self.res_type,
                             cookies=res_cookies,
                             headers=res_headers,
                             history=res_history,

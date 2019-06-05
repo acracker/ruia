@@ -25,18 +25,18 @@ def make_headers(string):
     :param string:
     :return:
     """
+    import re
     result = {}
     for header in string.split('\n'):
         header = header.strip()
         if header:
-            items = header.split(':')
+            items = re.split(r":", header)
             k = items[0]
             v = ":".join(items[1:])
             k = k.strip()
             v = v.strip()
             result[k] = v
     return result
-
 
 
 if __name__ == '__main__':
