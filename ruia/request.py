@@ -38,9 +38,9 @@ class Request(object):
 
     def __init__(self, url: str, method: str = 'GET', *,
                  callback=None,
-                 headers: dict = {},
-                 metadata: dict = {},
-                 request_config: dict = {},
+                 headers: dict = None,
+                 metadata: dict = None,
+                 request_config: dict = None,
                  request_session=None,
                  res_type: str = 'text',
                  **kwargs):
@@ -53,8 +53,8 @@ class Request(object):
             raise ValueError('%s method is not supported' % self.method)
 
         self.callback = callback
-        self.headers = headers
-        self.metadata = metadata if metadata is not None else {}
+        self.headers = headers or {}
+        self.metadata = metadata or {}
         self.request_session = request_session
         self.request_config = request_config or self.REQUEST_CONFIG
         self.res_type = res_type

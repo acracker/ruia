@@ -27,10 +27,11 @@ class Spider:
     failed_counts, success_counts = 0, 0
     start_urls, worker_tasks = [], []
 
-    def __init__(self, middleware=None, loop=None, is_async_start=False):
+    def __init__(self, middleware=None, loop=None, is_async_start=False, **kwargs):
         self.is_async_start = is_async_start
         self.logger = get_logger(name=self.name)
         self.loop = loop
+        self.kwargs = kwargs
         asyncio.set_event_loop(self.loop)
         # customize middleware
         if isinstance(middleware, list):
@@ -46,7 +47,7 @@ class Spider:
         raise NotImplementedError
 
     @classmethod
-    async def async_start(cls, middleware=None, loop=None, after_start=None, before_stop=None):
+    async def async_start(cls, middleware=None, loop=None, after_start=None, before_stop=None, **kwargs):
         """
         Start an async spider
         :param middleware:
@@ -56,7 +57,7 @@ class Spider:
         :return:
         """
         loop = loop or asyncio.get_event_loop()
-        spider_ins = cls(middleware=middleware, loop=loop, is_async_start=True)
+        spider_ins = cls(middleware=middleware, loop=loop, is_async_start=True, **kwargs)
         spider_ins.logger.info('Spider started!')
         start_time = datetime.now()
 
@@ -81,17 +82,18 @@ class Spider:
             spider_ins.logger.info('Spider finished!')
 
     @classmethod
-    def start(cls, middleware=None, loop=None, after_start=None, before_stop=None, close_event_loop=True):
+    def start(cls, middleware=None, loop=None, after_start=None, before_stop=None, close_event_loop=True, **kwargs):
         """
         Start a spider
         :param after_start:
         :param before_stop:
         :param middleware: customize middleware or a list of middleware
         :param loop: event loop
+        :param close_event_loop:
         :return:
         """
         loop = loop or asyncio.new_event_loop()
-        spider_ins = cls(middleware=middleware, loop=loop)
+        spider_ins = cls(middleware=middleware, loop=loop, **kwargs)
         spider_ins.is_async_start = False
         spider_ins.logger.info('Spider started!')
         start_time = datetime.now()
@@ -162,6 +164,7 @@ class Spider:
         async for request_ins in self.start_requests():
             self.request_queue.put_nowait(self.handle_request(request_ins))
         workers = [asyncio.ensure_future(self.start_worker()) for i in range(2)]
+        # await asyncio.gather(*workers)
         await self.request_queue.join()
         if not self.is_async_start:
             await self.stop(SIGINT)
@@ -178,7 +181,7 @@ class Spider:
                         if isinstance(callback_res, AsyncGeneratorType):
                             async for request_ins in callback_res:
                                 self.request_queue.put_nowait(self.handle_request(request_ins))
-                        if res.html is None:
+                        if res.text is None:
                             self.failed_counts += 1
                         else:
                             self.success_counts += 1
