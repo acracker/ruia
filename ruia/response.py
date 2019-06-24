@@ -10,22 +10,22 @@ class Response(object):
     """
 
     def __init__(self, url: str, *,
-                 metadata: dict,
+                 meta: dict,
                  content: bytes = b'',
                  cookies,
                  history,
                  headers: dict = None,
                  status: int):
         self._callback_result = None
-        self._url = url
-        self._content = content
-        self._metadata = metadata
-        self._cookies = cookies
-        self._history = history
-        self._headers = headers
-        self._status = status
-        self._text = None
-        self._json = None
+        self.__url = url
+        self.__content = content
+        self.__meta = meta
+        self.__cookies = cookies
+        self.__history = history
+        self.__headers = headers
+        self.__status = status
+        self.__text = None
+        self.__json = None
 
     @property
     def callback_result(self):
@@ -37,42 +37,42 @@ class Response(object):
 
     @property
     def url(self):
-        return self._url
+        return self.__url
 
     @property
-    def metadata(self):
-        return self._metadata
+    def meta(self):
+        return self.__meta
 
     @property
     def cookies(self):
-        return self._cookies
+        return self.__cookies
 
     @property
     def history(self):
-        return self._history
+        return self.__history
 
     @property
     def headers(self):
-        return self._headers
+        return self.__headers
 
     @property
     def status(self):
-        return self._status
+        return self.__status
 
     @property
     def text(self):
-        if self._text is None:
-            self._text = self._content.decode()
-        return self._text
+        if self.__text is None:
+            self.__text = self.__content.decode()
+        return self.__text
 
     @property
     def json(self):
-        if self._json is None:
+        if self.__json is None:
             try:
-                self._json = json.loads(self._content)
+                self.__json = json.loads(self.__content)
             except json.decoder.JSONDecodeError:
                 return None
-        return self._json
+        return self.__json
 
     @property
     def html_etree(self):
@@ -80,4 +80,4 @@ class Response(object):
         return html_etree
 
     def __str__(self):
-        return f'<Response url: {self._url} status:{self._status} metadata:{self._metadata}>'
+        return f'<Response url: {self.__url} status:{self.__status} meta:{self.__meta}>'

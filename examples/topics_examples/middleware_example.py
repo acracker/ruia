@@ -15,7 +15,7 @@ class TestSpider(Spider):
             yield Request(
                 page,
                 callback=self.parse_item,
-                metadata={'index': index}
+                meta={'index': index}
             )
 
     async def parse_item(self, res):

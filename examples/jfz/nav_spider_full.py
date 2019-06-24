@@ -135,8 +135,8 @@ class NavSpider(Spider):
                     continue
             url = 'https://www.jfz.com/simu/simuProductNew/GetPrdNetWorthDrawDown?prdCode=%s' % jfz_id
             # url = "https://www.jfz.com/simu/chart?id=%s" % jfz_id
-            metadata = {'_id': _id, 'jfz_id': jfz_id}
-            yield self.make_requests_from_url(url=url, res_type='json', metadata=metadata, headers=headers)
+            meta = {'_id': _id, 'jfz_id': jfz_id}
+            yield self.make_requests_from_url(url=url, res_type='json', meta=meta, headers=headers)
             self.logger.info("生成采集请求. ID:%s" % jfz_id)
 
     async def parse(self, response: Response):
@@ -157,8 +157,8 @@ class NavSpider(Spider):
             self.logger.debug('开始解析响应. url:%s' % response.url)
             if data['isLogin'] and data['isVerify']:
                 data = data['hcData']
-                _id = response.metadata['_id']
-                jfz_id = response.metadata['jfz_id']
+                _id = response.meta['_id']
+                jfz_id = response.meta['jfz_id']
                 tasks = []
                 tasks_flag = []
                 update_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')

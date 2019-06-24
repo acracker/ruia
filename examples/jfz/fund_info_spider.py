@@ -85,8 +85,8 @@ class FundInfoSpider(Spider):
                     self.logger.debug("最近更新过,跳过. ID: %s, 上次更新时间:%s" % (jfz_id, str_update_time))
                     continue
             url = 'https://www.jfz.com/simu/p-%s.html' % jfz_id
-            metadata = {'jfz_id': jfz_id}
-            yield self.make_requests_from_url(url=url, metadata=metadata)
+            meta = {'jfz_id': jfz_id}
+            yield self.make_requests_from_url(url=url, meta=meta)
             self.logger.info("生成采集请求. ID:%s" % jfz_id)
 
     async def parse(self, response: Response):
@@ -99,7 +99,7 @@ class FundInfoSpider(Spider):
             product_info = data.product_info
             if product_info is None:
                 self.logger.warning("网页解析错误. url:%s" % response.url)
-            jfz_id = response.metadata['jfz_id']
+            jfz_id = response.meta['jfz_id']
             register_number = product_info['register_number']
             full_name = product_info['full_name']
             establishment_date = product_info['build_date']

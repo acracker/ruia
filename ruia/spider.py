@@ -7,6 +7,8 @@ from inspect import isawaitable
 from signal import SIGINT, SIGTERM
 from types import AsyncGeneratorType
 
+import aiohttp
+
 from ruia.middleware import Middleware
 from ruia.request import Request
 from ruia.response import Response
@@ -27,11 +29,12 @@ class Spider:
     failed_counts, success_counts = 0, 0
     start_urls, worker_tasks = [], []
 
-    def __init__(self, middleware=None, loop=None, is_async_start=False, **kwargs):
+    def __init__(self, middleware=None, loop=None, is_async_start=False, **settings):
         self.is_async_start = is_async_start
         self.logger = get_logger(name=self.name)
         self.loop = loop
-        self.kwargs = kwargs
+        self.kwargs = {}                # request 参数
+        self.settings = settings        # 爬虫其他配置
         asyncio.set_event_loop(self.loop)
         # customize middleware
         if isinstance(middleware, list):
@@ -42,12 +45,20 @@ class Spider:
         self.request_queue = asyncio.Queue()
         # semaphore
         self.sem = asyncio.Semaphore(getattr(self, 'concurrency', 3))
+        self.request_session = None
 
     async def parse(self, response: Response):
         raise NotImplementedError
 
+    async def after_start(self):
+        self.request_session = aiohttp.ClientSession(loop=self.loop)
+
+    async def before_stop(self):
+        if self.request_session:
+            await self.request_session.close()
+
     @classmethod
-    async def async_start(cls, middleware=None, loop=None, after_start=None, before_stop=None, **kwargs):
+    async def async_start(cls, middleware=None, loop=None, after_start=None, before_stop=None, **settings):
         """
         Start an async spider
         :param middleware:
@@ -57,9 +68,10 @@ class Spider:
         :return:
         """
         loop = loop or asyncio.get_event_loop()
-        spider_ins = cls(middleware=middleware, loop=loop, is_async_start=True, **kwargs)
+        spider_ins = cls(middleware=middleware, loop=loop, is_async_start=True, **settings)
         spider_ins.logger.info('Spider started!')
         start_time = datetime.now()
+        after_start = after_start or getattr(cls, 'after_start', None)
 
         if after_start:
             func_after_start = after_start(spider_ins)
@@ -69,6 +81,7 @@ class Spider:
         try:
             await spider_ins.start_master()
         finally:
+            before_stop = before_stop or getattr(cls, 'before_stop', None)
             if before_stop:
                 func_before_stop = before_stop(spider_ins)
                 if isawaitable(func_before_stop):
@@ -80,9 +93,10 @@ class Spider:
                 spider_ins.logger.info(f'Failed requests: {spider_ins.failed_counts}')
             spider_ins.logger.info(f'Time usage: {end_time - start_time}')
             spider_ins.logger.info('Spider finished!')
+        return spider_ins
 
     @classmethod
-    def start(cls, middleware=None, loop=None, after_start=None, before_stop=None, close_event_loop=True, **kwargs):
+    def start(cls, middleware=None, loop=None, after_start=None, before_stop=None, close_event_loop=True, **settings):
         """
         Start a spider
         :param after_start:
@@ -93,11 +107,11 @@ class Spider:
         :return:
         """
         loop = loop or asyncio.new_event_loop()
-        spider_ins = cls(middleware=middleware, loop=loop, **kwargs)
+        spider_ins = cls(middleware=middleware, loop=loop, **settings)
         spider_ins.is_async_start = False
         spider_ins.logger.info('Spider started!')
         start_time = datetime.now()
-
+        after_start = after_start or getattr(cls, 'after_start', None)
         if after_start:
             func_after_start = after_start(spider_ins)
             if isawaitable(func_after_start):
@@ -113,6 +127,7 @@ class Spider:
         try:
             spider_ins.loop.run_forever()
         finally:
+            before_stop = before_stop or getattr(cls, 'before_stop', None)
             if before_stop:
                 func_before_stop = before_stop(spider_ins)
                 if isawaitable(func_before_stop):
@@ -127,6 +142,7 @@ class Spider:
             spider_ins.loop.run_until_complete(spider_ins.loop.shutdown_asyncgens())
             if close_event_loop:
                 spider_ins.loop.close()
+        return spider_ins
 
     async def handle_request(self, request):
         # request middleware
@@ -141,20 +157,25 @@ class Spider:
         if not self.start_urls or not isinstance(self.start_urls, list):
             raise ValueError("Spider must have a param named start_urls, eg: start_urls = ['https://www.github.com']")
         for url in self.start_urls:
-            yield self.make_requests_from_url(url=url)
+            if isinstance(url, Request):
+                yield url
+            else:
+                yield self.make_requests_from_url(url=url)
 
     def make_requests_from_url(self, url, **kwargs):
         headers = default_pop(kwargs, 'headers', getattr(self, 'headers', {}))
-        metadata = default_pop(kwargs, 'metadata', getattr(self, 'metadata', {}))
+        method = default_pop(kwargs, 'method', getattr(self, 'method', 'GET'))
+        meta = default_pop(kwargs, 'meta', getattr(self, 'meta', {}))
         request_config = default_pop(kwargs, 'request_config', getattr(self, 'request_config'))
         request_session = default_pop(kwargs, 'request_session', getattr(self, 'request_session', None))
         res_type = default_pop(kwargs, 'res_type', getattr(self, 'res_type', 'text'))
         kwargs.update(getattr(self, 'kwargs', {}))
         callback = kwargs.pop('callback', self.parse)
         return Request(url=url,
+                       method=method,
                        callback=callback,
                        headers=headers,
-                       metadata=metadata,
+                       meta=meta,
                        request_config=request_config,
                        request_session=request_session,
                        res_type=res_type,

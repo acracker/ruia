@@ -58,8 +58,8 @@ class NavSpider(Spider):
     async def start_requests(self):
         async for _id, jfz_id in self.get_fund_codes():
             url = "https://www.jfz.com/simu/chart?id=%s" % jfz_id
-            metadata = {'_id': _id}
-            yield self.make_requests_from_url(url=url, res_type='json', metadata=metadata)
+            meta = {'_id': _id}
+            yield self.make_requests_from_url(url=url, res_type='json', meta=meta)
 
     async def parse(self, response: Response):
         try:
@@ -68,7 +68,7 @@ class NavSpider(Spider):
                 logging.info("采集失败. url:%s" % response.url)
                 return
             data = data[0]['data']
-            _id = response.metadata['_id']
+            _id = response.meta['_id']
             update_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             tasks = []
             for item in data:

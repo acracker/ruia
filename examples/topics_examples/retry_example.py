@@ -40,7 +40,7 @@ class TestSpider(Spider):
             yield Request(
                 page,
                 callback=self.parse_item,
-                metadata={'index': index},
+                meta={'index': index},
                 request_config=self.request_config,
             )
 

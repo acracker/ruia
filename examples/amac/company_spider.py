@@ -156,7 +156,7 @@ class CompanySpider(Spider):
         # title = response.html_etree.xpath('//td[@class="td-title"]')
         # content = response.html_etree.xpath('//td[@class="td-content"]')
         # result = OrderedDict()
-        # company_code = response.metadata['company_code']
+        # company_code = response.meta['company_code']
         # for k, v in zip(title, content):
         #     result[k.text] = v
         # company_name = result['基金管理人全称(中文):'].xpath('//div[@id="complaint1"]')[0].text

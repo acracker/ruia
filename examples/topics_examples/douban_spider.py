@@ -29,6 +29,10 @@ class DoubanSpider(Spider):
     # kwargs = {"proxy": "http://0.0.0.0:8118"}
     kwargs = {}
 
+    def __init__(self, middleware=None, loop=None, is_async_start=False):
+        super().__init__(middleware, loop, is_async_start)
+        self.data = []
+
     async def parse(self, res):
         etree = res.html_etree
         pages = ['?start=0&filter='] + [i.get('href') for i in etree.cssselect('.paginator>a')]
@@ -37,16 +41,32 @@ class DoubanSpider(Spider):
             yield Request(
                 url,
                 callback=self.parse_item,
-                metadata={'index': index},
+                meta={'index': index},
                 request_config=self.request_config,
                 **self.kwargs
             )
 
     async def parse_item(self, res):
-        items_data = await DoubanItem.get_items(html=res.html)
+        items_data = await DoubanItem.get_items(html=res.text)
         for item in items_data:
             print(item.title)
+            self.data.append(item.title)
+
+
+async def before_stop(spider):
+    return 1
+
+
+async def after_start(spider):
+    return 1
+
+
+async def main():
+    await DoubanSpider.async_start(before_stop=before_stop, after_start=after_start)
 
 
 if __name__ == '__main__':
-    DoubanSpider.start()
+    import asyncio
+    asyncio.get_event_loop().run_until_complete(main())
+    # DoubanSpider.start()
+

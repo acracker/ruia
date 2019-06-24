@@ -39,7 +39,7 @@ class Request(object):
     def __init__(self, url: str, method: str = 'GET', *,
                  callback=None,
                  headers: dict = None,
-                 metadata: dict = None,
+                 meta: dict = None,
                  request_config: dict = None,
                  request_session=None,
                  res_type: str = 'text',
@@ -54,7 +54,7 @@ class Request(object):
 
         self.callback = callback
         self.headers = headers or {}
-        self.metadata = metadata or {}
+        self.meta = meta or {}
         self.request_session = request_session
         self.request_config = request_config or self.REQUEST_CONFIG
         self.res_type = res_type
@@ -133,7 +133,7 @@ class Request(object):
 
         response = Response(url=self.url,
                             content=res_content,
-                            metadata=self.metadata,
+                            meta=self.meta,
                             cookies=res_cookies,
                             headers=res_headers,
                             history=res_history,

@@ -26,7 +26,7 @@ class HackerNewsSpider(Spider):
             yield Request(
                 url,
                 callback=self.parse_item,
-                metadata={'index': index}
+                meta={'index': index}
             )
 
     async def parse_item(self, res):
